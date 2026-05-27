@@ -66,6 +66,14 @@
     }
     .btn-ghost:hover { border-color: var(--danger); color: var(--danger); }
     .merge-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 24px; }
+    .privacy-note {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
     .file-list { list-style: none; margin-bottom: 24px; }
     .file-item {
       display: flex;
@@ -184,6 +192,7 @@
       <p>或點擊選擇檔案（可多選）</p>
       <input type="file" id="fileInput" accept=".pdf" multiple style="display:none">
     </div>
+    <p class="privacy-note">🔒 檔案僅在您的瀏覽器本地處理，不會上傳至任何伺服器或被記錄</p>
     <ul class="file-list" id="fileList"></ul>
     <div class="merge-bar">
       <button class="btn-primary" id="mergeBtn" disabled>合併 PDF</button>
