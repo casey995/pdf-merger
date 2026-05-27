@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF 合併工具 — MIXXIN</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    :root {
+      --navy: #0D1B2A;
+      --navy-light: #1A2D40;
+      --yellow: #F5A623;
+      --yellow-hover: #E09510;
+      --surface-dark: #14202E;
+      --surface-card: #1E2F42;
+      --text-primary: #F0F4F8;
+      --text-secondary: #8A9BB0;
+      --border: #2A3F55;
+      --danger: #E05252;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background: var(--navy);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 32px 24px;
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--yellow);
+      margin-bottom: 32px;
+    }
+    .btn-primary {
+      background: var(--yellow);
+      color: var(--navy);
+      border: none;
+      border-radius: 8px;
+      padding: 12px 32px;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 15px;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--yellow-hover); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary:focus { outline: 2px solid var(--yellow); outline-offset: 2px; }
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .btn-ghost:hover { border-color: var(--danger); color: var(--danger); }
+    .merge-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 24px; }
+    .file-list { list-style: none; margin-bottom: 24px; }
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: var(--surface-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      cursor: grab;
+      user-select: none;
+    }
+    .file-item:active { cursor: grabbing; }
+    .drag-handle { color: var(--text-secondary); font-size: 18px; }
+    .file-name { flex: 1; font-size: 14px; }
+    .remove-btn {
+      background: none;
+      border: none;
+      color: var(--danger);
+      cursor: pointer;
+      font-size: 18px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: background 0.15s;
+      line-height: 1;
+    }
+    .remove-btn:hover { background: rgba(224,82,82,0.15); }
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 48px 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: var(--surface-card);
+      margin-bottom: 24px;
+    }
+    .dropzone:hover, .dropzone.drag-over {
+      border-color: var(--yellow);
+      background: var(--surface-dark);
+    }
+    .dropzone-icon { font-size: 40px; margin-bottom: 8px; }
+    .dropzone p { color: var(--text-secondary); font-size: 14px; margin-top: 8px; }
+    #status {
+      margin: 16px 0;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+    }
+    #status.loading { background: var(--surface-card); color: var(--text-secondary); display: block; }
+    #status.error { background: rgba(224,82,82,0.1); color: var(--danger); display: block; border: 1px solid var(--danger); }
+    .action-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: var(--surface-card);
+      border-top: 1px solid var(--border);
+      position: sticky;
+      bottom: 0;
+      margin-top: 24px;
+      border-radius: 0 0 12px 12px;
+    }
+    #pageCount { color: var(--text-secondary); font-size: 14px; }
+    .page-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 16px;
+      padding: 8px 0;
+    }
+    .page-card {
+      background: var(--surface-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+      transition: border-color 0.2s;
+    }
+    .page-card:hover { border-color: var(--yellow); }
+    .page-card canvas { width: 100%; display: block; }
+    .page-num {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-secondary);
+      padding: 6px;
+    }
+    .delete-page {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: var(--danger);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 26px;
+      height: 26px;
+      cursor: pointer;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .page-card:hover .delete-page { opacity: 1; }
+  </style>
+</head>
+<body>
+  <h1>PDF 合併工具</h1>
+  <div id="app">
+    <div class="dropzone" id="dropzone">
+      <div class="dropzone-icon">📄</div>
+      <strong>拖曳 PDF 檔案至此</strong>
+      <p>或點擊選擇檔案（可多選）</p>
+      <input type="file" id="fileInput" accept=".pdf" multiple style="display:none">
+    </div>
+    <ul class="file-list" id="fileList"></ul>
+    <div class="merge-bar">
+      <button class="btn-primary" id="mergeBtn" disabled>合併 PDF</button>
+      <button class="btn-ghost" id="clearBtn" style="display:none">清除全部</button>
+    </div>
+    <div id="status"></div>
+    <div id="previewSection" style="display:none">
+      <h2 style="font-family:Montserrat;font-size:18px;margin:32px 0 16px;color:var(--text-primary)">合併結果</h2>
+      <div class="page-grid" id="pageGrid"></div>
+      <div class="action-bar" id="actionBar">
+        <span id="pageCount"></span>
+        <button class="btn-primary" id="downloadBtn">下載 PDF</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    let pdfFiles = []; // [{ name: string, arrayBuffer: ArrayBuffer }]
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('drag-over');
+    });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      addFiles(Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf'));
+    });
+    fileInput.addEventListener('change', () => {
+      addFiles(Array.from(fileInput.files).filter(f => f.type === 'application/pdf'));
+      fileInput.value = '';
+    });
+
+    async function addFiles(files) {
+      if (!files.length) return;
+      const statusDiv = document.getElementById('status');
+      statusDiv.className = 'loading';
+      statusDiv.textContent = `正在讀取 ${files.length} 個檔案…`;
+      for (const file of files) {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          pdfFiles.push({ name: file.name, arrayBuffer });
+        } catch (err) {
+          statusDiv.className = 'error';
+          statusDiv.textContent = `無法讀取 ${file.name}：${err.message}`;
+          return;
+        }
+      }
+      statusDiv.style.display = 'none';
+      renderFileList();
+    }
+
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      pdfFiles = [];
+      mergedPdfBytes = null;
+      mergedPageCount = 0;
+      pageOrder = [];
+      deletedPages = new Set();
+      document.getElementById('previewSection').style.display = 'none';
+      document.getElementById('status').style.display = 'none';
+      renderFileList();
+    });
+
+    document.getElementById('fileList').addEventListener('click', (e) => {
+      if (e.target.classList.contains('remove-btn')) {
+        e.stopPropagation();
+        pdfFiles.splice(Number(e.target.dataset.index), 1);
+        renderFileList();
+      }
+    });
+
+    function renderFileList() {
+      const list = document.getElementById('fileList');
+      const mergeBtn = document.getElementById('mergeBtn');
+      list.innerHTML = '';
+      pdfFiles.forEach((file, index) => {
+        const li = document.createElement('li');
+        li.className = 'file-item';
+        li.dataset.index = index;
+        li.setAttribute('draggable', 'true');
+        const handle = document.createElement('span');
+        handle.className = 'drag-handle';
+        handle.textContent = '⠿';
+        const name = document.createElement('span');
+        name.className = 'file-name';
+        name.textContent = file.name;
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-btn';
+        removeBtn.dataset.index = index;
+        removeBtn.title = '移除';
+        removeBtn.textContent = '✕';
+        li.appendChild(handle);
+        li.appendChild(name);
+        li.appendChild(removeBtn);
+        list.appendChild(li);
+      });
+      mergeBtn.disabled = pdfFiles.length < 1;
+      document.getElementById('clearBtn').style.display = pdfFiles.length ? '' : 'none';
+    }
+
+    let dragSrc = null;
+
+    document.getElementById('fileList').addEventListener('dragstart', (e) => {
+      const item = e.target.closest('.file-item');
+      if (!item) return;
+      dragSrc = item;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => { item.style.opacity = '0.4'; }, 0);
+    });
+
+    document.getElementById('fileList').addEventListener('dragend', (e) => {
+      const item = e.target.closest('.file-item');
+      if (item) item.style.opacity = '1';
+      dragSrc = null;
+    });
+
+    document.getElementById('fileList').addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    });
+
+    document.getElementById('fileList').addEventListener('drop', (e) => {
+      e.preventDefault();
+      const target = e.target.closest('.file-item');
+      if (!target || !dragSrc || dragSrc === target) return;
+      dragSrc.style.opacity = '1';
+      const fromIndex = Number(dragSrc.dataset.index);
+      const toIndex = Number(target.dataset.index);
+      const [moved] = pdfFiles.splice(fromIndex, 1);
+      pdfFiles.splice(toIndex, 0, moved);
+      dragSrc = null;
+      renderFileList();
+    });
+
+    let dragSrcPageCard = null;
+
+    document.getElementById('pageGrid').addEventListener('dragstart', (e) => {
+      const card = e.target.closest('.page-card');
+      if (!card) return;
+      dragSrcPageCard = card;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => { card.style.opacity = '0.4'; }, 0);
+    });
+
+    document.getElementById('pageGrid').addEventListener('dragend', (e) => {
+      const card = e.target.closest('.page-card');
+      if (card) card.style.opacity = '1';
+      dragSrcPageCard = null;
+    });
+
+    document.getElementById('pageGrid').addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    });
+
+    document.getElementById('pageGrid').addEventListener('drop', (e) => {
+      e.preventDefault();
+      const target = e.target.closest('.page-card');
+      if (!target || !dragSrcPageCard || dragSrcPageCard === target) return;
+      if (target.style.display === 'none') return;
+      dragSrcPageCard.style.opacity = '1';
+
+      const fromPage = Number(dragSrcPageCard.dataset.page);
+      const toPage = Number(target.dataset.page);
+      const fromIdx = pageOrder.indexOf(fromPage);
+      const toIdx = pageOrder.indexOf(toPage);
+      if (fromIdx === -1 || toIdx === -1) { dragSrcPageCard = null; return; }
+      const [moved] = pageOrder.splice(fromIdx, 1);
+      pageOrder.splice(toIdx, 0, moved);
+
+      const grid = document.getElementById('pageGrid');
+      const cards = Array.from(grid.children);
+      const srcDomIdx = cards.indexOf(dragSrcPageCard);
+      const tgtDomIdx = cards.indexOf(target);
+      if (srcDomIdx < tgtDomIdx) {
+        grid.insertBefore(dragSrcPageCard, target.nextSibling);
+      } else {
+        grid.insertBefore(dragSrcPageCard, target);
+      }
+
+      dragSrcPageCard = null;
+    });
+
+    let mergedPdfBytes = null;
+    let mergedPageCount = 0;
+
+    document.getElementById('mergeBtn').addEventListener('click', async () => {
+      const status = document.getElementById('status');
+      status.style.display = '';
+      status.className = 'loading';
+      status.textContent = '合併中，請稍候…';
+      try {
+        const { PDFDocument } = PDFLib;
+        const merged = await PDFDocument.create();
+        for (const file of pdfFiles) {
+          const doc = await PDFDocument.load(new Uint8Array(file.arrayBuffer), { ignoreEncryption: true });
+          const pages = await merged.copyPages(doc, doc.getPageIndices());
+          pages.forEach(p => merged.addPage(p));
+        }
+        mergedPdfBytes = await merged.save();
+        mergedPageCount = merged.getPageCount();
+        status.style.display = 'none';
+        await renderPagePreviews();
+      } catch (err) {
+        status.className = 'error';
+        status.textContent = '合併失敗：' + (err?.message || err.toString());
+      }
+    });
+
+    let pageOrder = [];
+    let deletedPages = new Set();
+    let isRendering = false;
+
+    async function renderPagePreviews() {
+      if (isRendering) return;
+      isRendering = true;
+      const section = document.getElementById('previewSection');
+      const grid = document.getElementById('pageGrid');
+      section.style.display = 'block';
+      grid.innerHTML = '';
+      deletedPages.clear();
+
+      try {
+        const loadingTask = pdfjsLib.getDocument({ data: mergedPdfBytes.slice() });
+        const pdfDoc = await loadingTask.promise;
+        mergedPageCount = pdfDoc.numPages;
+        pageOrder = Array.from({ length: pdfDoc.numPages }, (_, i) => i + 1);
+
+        for (let i = 1; i <= pdfDoc.numPages; i++) {
+          const page = await pdfDoc.getPage(i);
+          const viewport = page.getViewport({ scale: 0.4 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+
+          const card = document.createElement('div');
+          card.className = 'page-card';
+          card.dataset.page = i;
+          card.setAttribute('draggable', 'true');
+
+          const numLabel = document.createElement('div');
+          numLabel.className = 'page-num';
+          numLabel.textContent = `第 ${i} 頁`;
+
+          const delBtn = document.createElement('button');
+          delBtn.className = 'delete-page';
+          delBtn.innerHTML = '✕';
+          delBtn.title = '刪除此頁';
+          delBtn.addEventListener('click', () => {
+            deletedPages.add(i);
+            card.style.display = 'none';
+            updatePageCount();
+          });
+
+          card.appendChild(canvas);
+          card.appendChild(numLabel);
+          card.appendChild(delBtn);
+          grid.appendChild(card);
+        }
+        updatePageCount();
+      } finally {
+        isRendering = false;
+      }
+    }
+
+    function updatePageCount() {
+      const remaining = mergedPageCount - deletedPages.size;
+      document.getElementById('pageCount').textContent = `共 ${remaining} 頁`;
+    }
+
+    document.getElementById('downloadBtn').addEventListener('click', async () => {
+      const status = document.getElementById('status');
+      status.style.display = '';
+      status.className = 'loading';
+      status.textContent = '準備下載…';
+      try {
+        if (deletedPages.size === mergedPageCount) {
+          status.className = 'error';
+          status.textContent = '無法下載：所有頁面已刪除';
+          return;
+        }
+        const { PDFDocument } = PDFLib;
+        const original = await PDFDocument.load(mergedPdfBytes.slice(), { ignoreEncryption: true });
+        const output = await PDFDocument.create();
+
+        const keepIndices = pageOrder
+          .filter(p => !deletedPages.has(p))
+          .map(p => p - 1);
+
+        const pages = await output.copyPages(original, keepIndices);
+        pages.forEach(p => output.addPage(p));
+
+        const finalBytes = await output.save();
+        const blob = new Blob([finalBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'merged.pdf';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        status.style.display = 'none';
+      } catch (err) {
+        status.className = 'error';
+        status.textContent = '下載失敗：' + (err?.message || err.toString());
+      }
+    });
+  </script>
+</body>
+</html>
